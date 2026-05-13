@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.cache/
+
+# Project Specific
+outputs/
+audio/
+*.m4a
+*.txt
+
+# OS
+.DS_Store
