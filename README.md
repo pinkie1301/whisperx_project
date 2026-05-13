@@ -146,6 +146,21 @@ setx HF_TOKEN "你的 Hugging Face read token"
 
 ## 執行
 
+完整參數：
+
+| Argument | 預設值 | 說明 |
+| --- | --- | --- |
+| `audio` | 必填 | 輸入音訊路徑，例如 `recording.m4a`。 |
+| `-o`, `--output` | `outputs/<音訊檔名>.txt` | 指定輸出的 `.txt` 路徑。 |
+| `--model` | `medium` | 模型列表參考 [whisper 官方說明](https://github.com/openai/whisper#available-models-and-languages) ，`large-v3` 模型會使用大約 10 GB VRAM。|
+| `--language` | `zh` | 轉錄語言代碼。中文用 `zh`。 |
+| `--num-speakers` | `6` | 音訊內的講者數量。 |
+| `--batch-size` | `4` | WhisperX transcribe batch size。GPU 可調大，記憶體不足時調小。 |
+| `--device` | `auto` | 執行裝置，可選 `auto`、`cpu`、`cuda`。 |
+| `--compute-type` | `auto` | 運算精度，可選 `auto`、`int8`、`float16`、`float32`。`auto` 會在 CUDA 用 `float16`，CPU 用 `int8`。 |
+| `--hf-token` | `$HF_TOKEN` | Hugging Face read token。 |
+| `--timecode` | 預設顯示 | 關閉每行最前面的 timecode。 |
+
 自動選擇 CUDA 或 CPU：
 
 ```bash
