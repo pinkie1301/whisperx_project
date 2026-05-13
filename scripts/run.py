@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import gc
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +11,12 @@ from .formatter import format_speaker_lines
 
 
 DEFAULT_MODEL = "medium"
+
+
+@dataclass(frozen=True)
+class RuntimeOptions:
+    device: str
+    compute_type: str
 
 
 def main() -> None:
@@ -22,6 +29,8 @@ def main() -> None:
         language=args.language,
         num_speakers=args.num_speakers,
         batch_size=args.batch_size,
+        device=args.device,
+        compute_type=args.compute_type,
         hf_token=args.hf_token or os.environ.get("HF_TOKEN"),
     )
     print(f"Wrote transcript to {output_path}")
@@ -48,6 +57,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-speakers", type=int, default=6, help="Known speaker count.")
     parser.add_argument("--batch-size", type=int, default=4, help="CPU-safe batch size.")
     parser.add_argument(
+        "--device",
+        choices=("auto", "cpu", "cuda"),
+        default="auto",
+        help="Runtime device. Default: auto uses CUDA when available, otherwise CPU.",
+    )
+    parser.add_argument(
+        "--compute-type",
+        choices=("auto", "int8", "float16", "float32"),
+        default="auto",
+        help="WhisperX compute type. Default: auto uses float16 on CUDA and int8 on CPU.",
+    )
+    parser.add_argument(
         "--hf-token",
         default=None,
         help="Hugging Face read token. Defaults to HF_TOKEN environment variable.",
@@ -69,6 +90,8 @@ def transcribe_with_speakers(
     language: str,
     num_speakers: int,
     batch_size: int,
+    device: str,
+    compute_type: str,
     hf_token: Optional[str],
 ) -> Path:
     if hf_token is None:
@@ -81,27 +104,26 @@ def transcribe_with_speakers(
     import whisperx
     from pyannote.audio import Pipeline
 
-    device = "cpu"
-    compute_type = "int8"
+    runtime = resolve_runtime_options(torch, device, compute_type)
     audio = whisperx.load_audio(str(audio_path))
 
     model = whisperx.load_model(
         model_name,
-        device,
-        compute_type=compute_type,
+        runtime.device,
+        compute_type=runtime.compute_type,
         language=language,
     )
     result = model.transcribe(audio, batch_size=batch_size, language=language)
     del model
     _release_memory(torch)
 
-    align_model, metadata = whisperx.load_align_model(language_code=language, device=device)
+    align_model, metadata = whisperx.load_align_model(language_code=language, device=runtime.device)
     result = whisperx.align(
         result["segments"],
         align_model,
         metadata,
         audio,
-        device,
+        runtime.device,
         return_char_alignments=False,
     )
     del align_model
@@ -111,6 +133,8 @@ def transcribe_with_speakers(
         "pyannote/speaker-diarization-community-1",
         token=hf_token,
     )
+    if runtime.device == "cuda":
+        diarize_pipeline.to(torch.device("cuda"))
     audio_data = {
         "waveform": torch.from_numpy(audio[None, :]),
         "sample_rate": 16000,
@@ -134,8 +158,45 @@ def transcribe_with_speakers(
     return output_path
 
 
+def resolve_runtime_options(
+    torch_module: object,
+    requested_device: str,
+    requested_compute_type: str,
+) -> RuntimeOptions:
+    cuda_available = _cuda_is_available(torch_module)
+
+    if requested_device == "auto":
+        device = "cuda" if cuda_available else "cpu"
+    elif requested_device == "cuda":
+        if not cuda_available:
+            raise SystemExit(
+                "CUDA was requested but is not available to PyTorch. "
+                "Install a CUDA-enabled PyTorch build or use --device cpu."
+            )
+        device = "cuda"
+    else:
+        device = "cpu"
+
+    if requested_compute_type == "auto":
+        compute_type = "float16" if device == "cuda" else "int8"
+    else:
+        compute_type = requested_compute_type
+
+    return RuntimeOptions(device=device, compute_type=compute_type)
+
+
+def _cuda_is_available(torch_module: object) -> bool:
+    return bool(
+        hasattr(torch_module, "cuda")
+        and hasattr(torch_module.cuda, "is_available")
+        and torch_module.cuda.is_available()
+    )
+
+
 def _release_memory(torch_module: object) -> None:
     gc.collect()
+    if _cuda_is_available(torch_module):
+        torch_module.cuda.empty_cache()
     if hasattr(torch_module, "mps") and torch_module.mps.is_available():
         torch_module.mps.empty_cache()
 

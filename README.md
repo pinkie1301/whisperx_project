@@ -1,82 +1,210 @@
-# WhisperX 中文講者逐字稿
+# WhisperX 中文講者標記轉錄
 
-這個資料夾提供一個本機腳本，將錄音轉成中文逐字稿，並用 6 位講者標籤輸出成 `.txt`。
+這個專案使用 WhisperX 將音訊轉成中文文字稿，並用 pyannote diarization 產生講者標記。預設會輸出 6 位講者，標籤為 `A` 到 `F`，結果寫入 `outputs/`。
 
-## 環境
+## 建議設定
 
-目前 WhisperX 需要 Python `>=3.10, <3.14`。你的系統 `python3` 是 3.9.6，所以請先安裝 Python 3.11 或 3.12。
+- Python: `>=3.10, <3.14`
+- macOS / CPU: `--device cpu --compute-type int8`
+- Windows / CPU: `--device cpu --compute-type int8`
+- Windows / NVIDIA CUDA: `--device cuda --compute-type float16`
+- 預設 runtime: `--device auto --compute-type auto`
+  - 偵測到 CUDA 時使用 `cuda` + `float16`
+  - 否則使用 `cpu` + `int8`
 
-macOS + 16GB RAM 建議設定：
+## 依賴套件安裝
 
-- ASR model: `medium`
-- device: `cpu`
-- compute type: `int8`
-- speakers: `6`
-- output labels: `A` 到 `F`
+官方參考：
 
-## 安裝
+- WhisperX setup: <https://github.com/m-bain/whisperX>
+- OpenAI Whisper setup: <https://github.com/openai/whisper#setup>
+- PyTorch 安裝選擇器: <https://pytorch.org/get-started/locally/>
+
+WhisperX 官方建議可直接用 PyPI 安裝：
+
+```bash
+python -m pip install whisperx
+```
+
+OpenAI Whisper setup 說明也要求系統安裝 `ffmpeg`。如果 `tiktoken` 沒有你平台的 prebuilt wheel，可能還需要 Rust toolchain。
+
+本專案建議先依平台安裝 PyTorch，再安裝 `requirements.txt`。
+
+## macOS CPU 安裝
 
 ```bash
 cd /Users/pinkie/whisperx_project
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
+python -m pip install torch torchvision torchaudio
 python -m pip install -r requirements.txt
+brew install ffmpeg
 ```
 
-如果你的機器沒有 `python3.11`，可先用 Homebrew 安裝：
+如果沒有 `python3.11`：
 
 ```bash
 brew install python@3.11
 ```
 
+## Windows CPU 安裝
+
+PowerShell：
+
+```powershell
+cd D:\whisperx_project
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install torch torchvision torchaudio
+python -m pip install -r requirements.txt
+```
+
+安裝 FFmpeg，擇一即可：
+
+```powershell
+choco install ffmpeg
+```
+
+```powershell
+scoop install ffmpeg
+```
+
+## Windows CUDA 安裝
+
+先安裝 NVIDIA driver，並確認 PyTorch 能看到 CUDA。CUDA toolkit 版本沒有固定要求，依 PyTorch 官方安裝選擇器選 Windows + Pip + CUDA 版本即可。WhisperX README 目前提到 GPU 加速可先安裝 CUDA toolkit 12.8。
+
+常見流程：
+
+```powershell
+cd D:\whisperx_project
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+WhisperX 3.8.5 需要 `torch~=2.8.0`、`torchaudio~=2.8.0`、`torchvision~=0.23.0`。請鎖定版本安裝 CUDA 12.8 wheel：
+
+```powershell
+python -m pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+如果之前裝到不相容版本，例如 `torch 2.11.0+cu128`，先移除再重裝：
+
+```powershell
+python -m pip uninstall -y torch torchvision torchaudio
+python -m pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+```
+
+接著安裝或補齊本專案其他依賴：
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+驗證 CUDA：
+
+```powershell
+python -c "import torch, torchvision, torchaudio; print(torch.__version__); print(torchvision.__version__); print(torchaudio.__version__); print(torch.cuda.is_available()); print(torch.version.cuda); print(torch.cuda.get_device_name(0))"
+```
+
+輸出應類似：
+
+```txt
+2.8.0+cu128
+0.23.0+cu128
+2.8.0+cu128
+True
+12.8
+NVIDIA GeForce RTX xxxx
+```
+
+如果 `torch.cuda.is_available()` 是 `False`，請先修正 PyTorch / NVIDIA driver / CUDA 安裝，再用 `--device cuda`。
+
 ## Hugging Face token
 
-先到 Hugging Face 接受 `pyannote/speaker-diarization-community-1` 的模型條款，建立 read token，然後設定：
+pyannote diarization 需要 Hugging Face read token。請先接受 `pyannote/speaker-diarization-community-1` 的模型條款，建立 read token，然後設定環境變數。
+
+macOS / bash / zsh：
 
 ```bash
-export HF_TOKEN="你的 HuggingFace read token"
+export HF_TOKEN="你的 Hugging Face read token"
+```
+
+Windows PowerShell，目前視窗有效：
+
+```powershell
+$env:HF_TOKEN="你的 Hugging Face read token"
+```
+
+Windows PowerShell，永久寫入使用者環境變數：
+
+```powershell
+setx HF_TOKEN "你的 Hugging Face read token"
 ```
 
 ## 執行
 
+自動選擇 CUDA 或 CPU：
+
 ```bash
-source .venv/bin/activate
 python -m scripts.run recording.m4a
 ```
 
-未指定輸出路徑時，會輸出到原始音檔同名 `.txt`：
-
-```txt
-recording.txt
-```
-
-也可以用 argument 指定輸出路徑：
+指定輸出路徑：
 
 ```bash
 python -m scripts.run recording.m4a -o outputs/recording_speakers.txt
 ```
 
-格式範例：
+強制 CPU：
 
-```txt
-A: 今天天氣真好。
-B: 沒錯，今天是晴天。
-C: 我們先整理重點。
+```bash
+python -m scripts.run recording.m4a --device cpu --compute-type int8
 ```
 
-若要改成更高品質但更慢的模型：
+強制 CUDA：
+
+```bash
+python -m scripts.run recording.m4a --device cuda --compute-type float16 --batch-size 16
+```
+
+如果 CUDA 記憶體不足，可降低 batch size 或改用 `int8`：
+
+```bash
+python -m scripts.run recording.m4a --device cuda --compute-type int8 --batch-size 4
+```
+
+使用更大的 Whisper model：
 
 ```bash
 python -m scripts.run recording.m4a --model large-v3
 ```
 
-腳本會用 WhisperX 預先載入的 16kHz mono waveform 交給 pyannote，避開 macOS 上 `torchcodec` 找不到 FFmpeg dylib 時的音訊解碼問題。
+預設輸出：
+
+```txt
+outputs/recording.txt
+```
+
+輸出格式範例：
+
+```txt
+A: 第一位講者的內容。
+B: 第二位講者的內容。
+C: 第三位講者的內容。
+```
+
+## 注意事項
+
+- OpenAI Whisper setup 要求系統有 `ffmpeg`；Windows 可用 Chocolatey 或 Scoop，macOS 可用 Homebrew。
+- WhisperX CPU/Mac 執行可使用 `--device cpu --compute-type int8`。
+- WhisperX CUDA 執行通常使用 `float16`；低 VRAM 時可改 `int8` 或降低 `--batch-size`。
+- 本腳本會用 WhisperX 載入的 16kHz mono waveform 交給 pyannote，避開某些平台上 `torchcodec` 或 FFmpeg dylib 解析音訊時的問題。
 
 ## 測試
 
-格式化邏輯不需要 WhisperX 也能測：
-
 ```bash
-python3 -m unittest tests/test_transcript_formatter.py
+python -m unittest discover -s tests
 ```

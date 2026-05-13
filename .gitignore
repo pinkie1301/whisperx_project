@@ -9,6 +9,7 @@ outputs/
 audio/
 *.m4a
 *.txt
+!requirements.txt
 
 # OS
 .DS_Store
