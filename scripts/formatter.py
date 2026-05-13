@@ -8,7 +8,7 @@ UNKNOWN_SPEAKER = "Unknown"
 
 
 def format_speaker_lines(segments: Iterable[Mapping[str, object]]) -> list[str]:
-    """Return transcript lines grouped by consecutive speaker.
+    """Return transcript lines labelled by speaker, one line per segment.
 
     Speaker IDs are mapped to A-F by first appearance so labels remain stable
     for a single transcript even when pyannote returns non-sequential IDs.
@@ -23,12 +23,7 @@ def format_speaker_lines(segments: Iterable[Mapping[str, object]]) -> list[str]:
 
         speaker_id = segment.get("speaker")
         speaker = _display_name_for_speaker(speaker_id, speaker_map)
-
-        if lines and lines[-1][0] == speaker:
-            previous_speaker, previous_text = lines[-1]
-            lines[-1] = (previous_speaker, f"{previous_text}{text}")
-        else:
-            lines.append((speaker, text))
+        lines.append((speaker, text))
 
     return [f"{speaker}: {text}" for speaker, text in lines]
 

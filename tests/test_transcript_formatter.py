@@ -4,7 +4,7 @@ from scripts.formatter import format_speaker_lines
 
 
 class TranscriptFormatterTest(unittest.TestCase):
-    def test_maps_six_speakers_by_first_appearance_and_merges_consecutive_segments(self):
+    def test_maps_six_speakers_by_first_appearance_without_merging_consecutive_segments(self):
         segments = [
             {"speaker": "SPEAKER_04", "text": "今天天氣真好。"},
             {"speaker": "SPEAKER_04", "text": "適合討論報告。"},
@@ -18,7 +18,8 @@ class TranscriptFormatterTest(unittest.TestCase):
         self.assertEqual(
             format_speaker_lines(segments),
             [
-                "A: 今天天氣真好。適合討論報告。",
+                "A: 今天天氣真好。",
+                "A: 適合討論報告。",
                 "B: 沒錯，今天是晴天。",
                 "C: 我們先整理重點。",
                 "D: 我負責簡報。",
