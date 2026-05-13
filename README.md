@@ -182,6 +182,12 @@ python -m scripts.run recording.m4a --device cuda --compute-type int8 --batch-si
 python -m scripts.run recording.m4a --model large-v3
 ```
 
+預設每一行會在最前面顯示 timecode。若要關閉 timecode：
+
+```bash
+python -m scripts.run recording.m4a --timecode
+```
+
 預設輸出：
 
 ```txt
@@ -191,9 +197,9 @@ outputs/recording.txt
 輸出格式範例：
 
 ```txt
-A: 第一位講者的內容。
-B: 第二位講者的內容。
-C: 第三位講者的內容。
+[00:00:03.120] A: 第一位講者的內容。
+[00:00:08.450] B: 第二位講者的內容。
+[00:00:12.300] C: 第三位講者的內容。
 ```
 
 ## 注意事項

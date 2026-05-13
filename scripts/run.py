@@ -31,6 +31,7 @@ def main() -> None:
         batch_size=args.batch_size,
         device=args.device,
         compute_type=args.compute_type,
+        include_timecode=args.include_timecode,
         hf_token=args.hf_token or os.environ.get("HF_TOKEN"),
     )
     print(f"Wrote transcript to {output_path}")
@@ -73,6 +74,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Hugging Face read token. Defaults to HF_TOKEN environment variable.",
     )
+    parser.add_argument(
+        "--timecode",
+        dest="include_timecode",
+        action="store_false",
+        help="Disable timecode prefixes in the .txt output.",
+    )
+    parser.set_defaults(include_timecode=True)
     return parser.parse_args()
 
 
@@ -92,6 +100,7 @@ def transcribe_with_speakers(
     batch_size: int,
     device: str,
     compute_type: str,
+    include_timecode: bool,
     hf_token: Optional[str],
 ) -> Path:
     if hf_token is None:
@@ -152,7 +161,7 @@ def transcribe_with_speakers(
         fill_nearest=True,
     )
 
-    lines = format_speaker_lines(result["segments"])
+    lines = format_speaker_lines(result["segments"], include_timecode=include_timecode)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output_path
